@@ -1,0 +1,3 @@
+package fileone
+
+func bob() {}

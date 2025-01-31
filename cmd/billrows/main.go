@@ -8,12 +8,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/transform"
 )
 
+type cityTemps struct {
+	min, max, sum float64
+	count         int64
+}
+
 func main() {
+
 	file, err := os.Open("./data/measurements.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -21,63 +24,63 @@ func main() {
 	}
 
 	defer file.Close()
-	// Convert from Windows-1252 (ISO-8859-1) to UTF-8
-	decoder := charmap.Windows1252.NewDecoder()
-	reader := transform.NewReader(file, decoder)
 
-	fileOutputMap := make(map[string][]float32)
+	fileOutputMap := make(map[string]*cityTemps)
 
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(file)
 
 	// Read the file line by line
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Println(line)
-		cityName, cityTempValue := processLine(line)
+		// fmt.Println(line)
+		// cityName, cityTempValue := splitLine(line)
+		cityName, cityTemp, hasSemi := strings.Cut(line, ";")
+		if !hasSemi {
+			continue
+		}
+		cityTempValue, err := strconv.ParseFloat(cityTemp, 64)
+		if err != nil {
+			panic(err)
+		}
 		// Check if the key exists
-		if _, exists := fileOutputMap[cityName]; exists {
-			// Convert string to float64
-			floatValue, err := strconv.ParseFloat(cityTempValue, 32)
-			if err != nil {
-				fmt.Printf("Error converting string to float64: %v\n", err)
-				return
-			}
-			fileOutputMap[cityName] = append(fileOutputMap[cityName], float32(floatValue))
+		foundCityTemp, ok := fileOutputMap[cityName]
+		if ok {
+			foundCityTemp.min = min(foundCityTemp.min, cityTempValue)
+			foundCityTemp.max = max(foundCityTemp.max, cityTempValue)
+			foundCityTemp.sum += cityTempValue
+			foundCityTemp.count++
 		} else {
-			// Key does not exist, add it with a default value
-			// Convert string to float64
-			floatValue, err := strconv.ParseFloat(cityTempValue, 32)
-			if err != nil {
-				fmt.Printf("Error converting string to float64: %v\n", err)
-				return
+			fileOutputMap[cityName] = &cityTemps{
+				min:   cityTempValue,
+				max:   cityTempValue,
+				sum:   cityTempValue,
+				count: 1,
 			}
-			fileOutputMap[cityName] = []float32{float32(floatValue)}
 
 		}
+
 	}
 	// Check for any errors during scanning
 	if err := scanner.Err(); err != nil {
 		panic(err)
 	}
 
-	// printSortedList(&fileOutputMap)
+	printSortedList(&fileOutputMap)
 }
 
-func printSortedList(fileOutputMap *map[string][]float32) {
-	keys := make([]string, 0, len(*fileOutputMap))
-	for key := range *fileOutputMap {
-		keys = append(keys, key)
+func printSortedList(fileOutputMap *map[string]*cityTemps) {
+	cities := make([]string, 0, len(*fileOutputMap))
+	for city := range *fileOutputMap {
+		cities = append(cities, city)
 	}
-	sort.Strings(keys) // Sort keys alphabetically
+	sort.Strings(cities) // Sort keys alphabetically
 
-	for _, key := range keys {
+	for _, key := range cities {
 		// Print the key and its sorted values
-		fmt.Println(key, (*fileOutputMap)[key])
+
+		mean := (*fileOutputMap)[key].sum / float64((*fileOutputMap)[key].count)
+
+		fmt.Printf("%s=%.1f/%.1f/%.1f,", key, (*fileOutputMap)[key].min, mean, (*fileOutputMap)[key].max)
+
 	}
-}
-
-func processLine(line string) (string, string) {
-	splitResult := strings.Split(line, ";")
-
-	return splitResult[0], splitResult[1]
 }
